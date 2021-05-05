@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 class ImageBuffer():
@@ -15,8 +16,8 @@ class ImageBuffer():
                 self.data.append(element)
                 to_return.append(element)
             else:
-                if random.uniform(0,1) > 0.5:
-                    i = random.randint(0, self.max_size-1)
+                if np.random.uniform(0,1) > 0.5:
+                    i = np.random.randint(0, self.max_size-1)
                     to_return.append(self.data[i].clone())
                     self.data[i] = element
                 else:

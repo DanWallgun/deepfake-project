@@ -14,7 +14,7 @@ from util.storage import (
     MemoryStorage,
     S3BucketStorage
 )
-from util.yacloud import s3 as YaS3s
+from util.yacloud import s3 as YaS3
 
 
 def create_config():
@@ -81,7 +81,7 @@ def main():
 
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
-        if buffer.shape[0] == 24 or (not ret and buffer.shape[0] > 0):
+        if buffer.shape[0] == 24 * 4 or (not ret and buffer.shape[0] > 0):
             image = buffer_tensor
             image = model.forward({'A': buffer_tensor})['A']
             image = 0.5 * (image + 1.0)
