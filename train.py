@@ -2,6 +2,7 @@ import sys
 import time
 import configparser
 from datetime import timedelta
+import logging
 
 import tqdm
 from torch.utils.data import DataLoader
@@ -15,6 +16,9 @@ from util.storage import (
     S3BucketStorage
 )
 from util.yacloud import s3 as YaS3
+
+logging.basicConfig(filename='info_log.txt', encoding='utf-8', filemode='w', level=logging.INFO)
+
 
 def create_config():
     config_parser = configparser.ConfigParser()
@@ -91,7 +95,8 @@ def main():
             elapsed = time.perf_counter() - start_time
             eta_seconds = elapsed / batches_done * batches_left
             full_log_str += 'ETA: %s' % (timedelta(seconds=eta_seconds))
-            print(full_log_str)
+            # print(full_log_str)
+            logging.info(full_log_str)
             #####
         model.save_networks(epoch)
 
