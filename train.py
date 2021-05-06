@@ -1,12 +1,11 @@
 import sys
-import time
 import configparser
-from datetime import timedelta
 import logging
 
 import tqdm
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
 
 from dataloaders.video_dataset import VideoDataset
 from models.cycle_gan import CycleGAN
@@ -16,6 +15,7 @@ from util.storage import (
     S3BucketStorage
 )
 from util.yacloud import s3 as YaS3
+from util.logger import Logger
 
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
@@ -48,7 +48,7 @@ def create_storage(config, name) -> Storage:
     assert False
 
 
-def create_dataloader(config, datasets_storage):
+def create_dataloader(config, datasets_storage, copy_data_to_local=False):
     train_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
@@ -57,11 +57,11 @@ def create_dataloader(config, datasets_storage):
         config.get('TrainVideoA'),
         config.get('TrainVideoB')
     ]
-    #already_downloaded
-    #for path in video_paths:
-    #     file_bytes = datasets_storage.load_file(path)
-    #     with open(path, 'wb') as f:
-    #         f.write(file_bytes)
+    if copy_data_to_local:
+        for path in video_paths:
+            file_bytes = datasets_storage.load_file(path)
+            with open(path, 'wb') as f:
+                f.write(file_bytes)
     dataloader = DataLoader(
         VideoDataset(
             video_paths=video_paths,
@@ -77,7 +77,11 @@ def create_dataloader(config, datasets_storage):
 def main():
     config = create_config()
     datasets_storage = create_storage(config, 'Datasets')
-    dataloader = create_dataloader(config, datasets_storage)
+    dataloader = create_dataloader(
+        config,
+        datasets_storage,
+        config.getboolean('CopyDatasetsToLocal')
+    )
     model = CycleGAN(config, create_storage(config, 'Checkpoints'))
 
     starting_epoch = config.getint('StartingEpoch')
@@ -89,29 +93,21 @@ def main():
     else:
         model.load_networks(starting_epoch - 1)
 
-    start_time = time.perf_counter()
+    logger = Logger(
+        SummaryWriter(f'./runs/experiment-{config.get("ExperimentName")}/'),
+        starting_epoch, epoch_number, batches_in_epoch
+    )
+
     for epoch in range(starting_epoch, epoch_number):
-        logger = setup_logger(f'Train:Epoch{epoch}', f'logs/info_log_epoch{epoch}.log')
+        logger.new_epoch(epoch)
         for batch_idx, batch in enumerate(dataloader):
             losses = model.optimize_parameters(batch)
 
-            # log
-            full_log_str = 'Epoch %03d/%03d [%04d/%04d] -- ' % (epoch + 1, epoch_number, batch_idx + 1, batches_in_epoch)
-            for i, loss_name in enumerate(losses.keys()):
-                if i + 1 == len(losses.keys()):
-                    full_log_str += '%s: %.4f -- ' % (loss_name, losses[loss_name])
-                else:
-                    full_log_str += '%s: %.4f | ' % (loss_name, losses[loss_name])
-
-            batches_done = batches_in_epoch * (epoch - starting_epoch) + (batch_idx + 1)
-            batches_left = batches_in_epoch * (epoch_number - epoch - 1) + batches_in_epoch - (batch_idx + 1)
-            elapsed = time.perf_counter() - start_time
-            eta_seconds = elapsed / batches_done * batches_left
-            full_log_str += 'ETA: %s' % (timedelta(seconds=eta_seconds))
-            # print(full_log_str)
-            logger.info(full_log_str)
-            #####
+            logger.end_batch(batch_idx, losses)
         model.save_networks(epoch)
+
+    tb_writer.flush()
+    tb_writer.close()
 
 
 if __name__ == '__main__':
