@@ -61,6 +61,19 @@ class CycleGAN():
                 ),
                 lr=self.learning_rate
             )
+
+            self.lr_scheduler_G = torch.optim.lr_scheduler.CyclicLR(
+                optimizer=self.optimizer_G,
+                base_lr=config.getfloat('MinLearningRate'),
+                max_lr=config.getfloat('LearningRate'),
+                cycle_momentum=False
+            )
+            self.lr_scheduler_D = torch.optim.lr_scheduler.CyclicLR(
+                optimizer=self.optimizer_D,
+                base_lr=config.getfloat('MinLearningRate'),
+                max_lr=config.getfloat('LearningRate'),
+                cycle_momentum=False
+            )
         ####    ####
 
     def init_networks_normal(self):
@@ -185,6 +198,9 @@ class CycleGAN():
 
         self.optimizer_D.step()
         ####    ####
+
+        self.lr_scheduler_G.step()
+        self.lr_scheduler_D.step()
 
         return {
             'loss_G': loss_G,

@@ -2,6 +2,8 @@ import sys
 import configparser
 import logging
 
+import numpy as np
+import cv2
 import tqdm
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
@@ -49,7 +51,23 @@ def create_storage(config, name) -> Storage:
 
 
 def create_dataloader(config, datasets_storage, copy_data_to_local=False):
+    def get_random_crop(image, crop_height, crop_width):
+        max_x = image.shape[1] - crop_width
+        max_y = image.shape[0] - crop_height
+
+        x = np.random.randint(0, max_x)
+        y = np.random.randint(0, max_y)
+
+        crop = image[y: y + crop_height, x: x + crop_width]
+        return crop
+
+    image_size = config.getint('ImageSize')
+
+    # Dataset loader
     train_transform = transforms.Compose([
+        transforms.Lambda(lambda x: cv2.resize(x, dsize=(int(image_size * 1.1), int(image_size * 1.1)), interpolation=cv2.INTER_CUBIC)),
+        transforms.Lambda(lambda x: get_random_crop(x, image_size, image_size)),
+        transforms.Lambda(lambda x: cv2.flip(x, flipCode=1) if np.random.randint(2) else x),
         transforms.ToTensor(),
         transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
     ])
@@ -93,10 +111,9 @@ def main():
     else:
         model.load_networks(starting_epoch - 1)
 
-    logger = Logger(
-        SummaryWriter(f'./runs/experiment-{config.get("ExperimentName")}/'),
-        starting_epoch, epoch_number, batches_in_epoch
-    )
+    tb_writer = SummaryWriter(f'./runs/experiment-{config.get("ExperimentName")}/')
+
+    logger = Logger(tb_writer, starting_epoch, epoch_number, batches_in_epoch)
 
     for epoch in range(starting_epoch, epoch_number):
         logger.new_epoch(epoch)
@@ -105,6 +122,11 @@ def main():
 
             logger.end_batch(batch_idx, losses)
         model.save_networks(epoch)
+        tb_writer.add_image('TrainImages/A', batch['A'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/B', batch['B'][0] * 0.5 + 0.5, epoch)
+        batch = model.forward(batch)
+        tb_writer.add_image('TrainImages/A_gen', batch['A'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/B_gen', batch['B'][0] * 0.5 + 0.5, epoch)
 
     tb_writer.flush()
     tb_writer.close()

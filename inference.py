@@ -44,7 +44,8 @@ def prepare_data(config, datasets_storage):
 def main():
     config = create_config()
     datasets_storage = create_storage(config, 'Datasets')
-    prepare_data(config, datasets_storage)
+    if config.getboolean('CopyDatasetsToLocal'):
+        prepare_data(config, datasets_storage)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -56,28 +57,30 @@ def main():
     kek[-2] += '-out'
     out_video_path = '.'.join(kek)
 
+    image_size = config.getint('ImageSize')
+
     torch.autograd.set_grad_enabled(False)
 
     model = CycleGAN(config, create_storage(config, 'Checkpoints'))
     model.load_networks(config.getint('InferenceEpoch'))
     vid_cap = cv2.VideoCapture(video_path)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_cap = cv2.VideoWriter(out_video_path, fourcc, 24.0, (512,  256))
+    out_cap = cv2.VideoWriter(out_video_path, fourcc, 24.0, (2 * image_size,  image_size))
 
     frame_count = int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
     counter = 0
 
     start_time = time.perf_counter()
 
-    buffer = np.ndarray(shape=(0,256,256,3), dtype=np.uint8)
-    buffer_tensor = torch.empty((0,3,256,256))
+    buffer = np.ndarray(shape=(0, image_size, image_size, 3), dtype=np.uint8)
+    buffer_tensor = torch.empty((0, 3, image_size, image_size))
 
     while vid_cap.isOpened():
         ret, frame = vid_cap.read()
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             buffer = np.append(buffer, [frame], axis=0)
-            buffer_tensor = torch.cat((buffer_tensor, transform(frame).view(-1, 3, 256, 256)), dim=0)
+            buffer_tensor = torch.cat((buffer_tensor, transform(frame).view(-1, 3, image_size, image_size)), dim=0)
 
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
@@ -97,8 +100,8 @@ def main():
             elapsed_time = time.perf_counter() - start_time
             sys.stdout.write('\n' + f'frames = {counter}\ttime = {elapsed_time}\tspeed = {counter / elapsed_time}\tETA = {(frame_count - counter) / (counter / elapsed_time) / 60}')
 
-            buffer = np.ndarray(shape=(0,256,256,3), dtype=np.uint8)
-            buffer_tensor = torch.empty((0,3,256,256))
+            buffer = np.ndarray(shape=(0, image_size, image_size,3), dtype=np.uint8)
+            buffer_tensor = torch.empty((0, 3, image_size, image_size))
 
         if not ret:
             break
