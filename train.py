@@ -102,6 +102,8 @@ def main():
     )
     model = CycleGAN(config, create_storage(config, 'Checkpoints'))
 
+    logging_freq = config.getint('LoggingFreq')
+
     starting_epoch = config.getint('StartingEpoch')
     epoch_number = config.getint('EpochNumber')
     batches_in_epoch = config.getint('BatchesInEpoch')
@@ -119,8 +121,8 @@ def main():
         logger.new_epoch(epoch)
         for batch_idx, batch in enumerate(dataloader):
             losses = model.optimize_parameters(batch)
-
-            logger.end_batch(batch_idx, losses)
+            if (batch_idx + 1) % logging_freq == 0:
+                logger.end_batch(batch_idx, losses)
         model.save_networks(epoch)
         tb_writer.add_image('TrainImages/A/real', batch['A'][0] * 0.5 + 0.5, epoch)
         tb_writer.add_image('TrainImages/B/real', batch['B'][0] * 0.5 + 0.5, epoch)

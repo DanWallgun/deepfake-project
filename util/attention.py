@@ -9,7 +9,7 @@ from external.attention.model import BiSeNet
 class AttentionProvider():
     def __init__(self, save_path: str, device):
         self.device = device
-        self.model = BiSeNet(n_classes=19)
+        self.model = BiSeNet(n_classes=19).to(self.device)
         self.model.load_state_dict(torch.load(
             save_path,
             map_location=self.device
@@ -66,4 +66,4 @@ class AttentionProvider():
             weights,
             (h, w),
             interpolation=cv2.INTER_NEAREST
-        ))
+        )).to(self.device)

@@ -157,11 +157,11 @@ class CycleGAN():
         # GAN loss
         fake_B = self.netG_A2B(real_A)
         pred_fake = self.netD_B(fake_B)
-        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real)
+        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real) * 5.0
 
         fake_A = self.netG_B2A(real_B)
         pred_fake = self.netD_A(fake_A)
-        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real)
+        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real) * 5.0
 
         # Cycle loss
         rec_A = self.netG_B2A(fake_B)
@@ -211,7 +211,7 @@ class CycleGAN():
         loss_D_fake = self.criterion_GAN(pred_fake, target_fake)
 
         # Total loss
-        loss_D_A = (loss_D_real + loss_D_fake) * 0.5
+        loss_D_A = (loss_D_real + loss_D_fake) * 1.0
         loss_D_A.backward()
 
         #### Discriminator B
@@ -225,7 +225,7 @@ class CycleGAN():
         loss_D_fake = self.criterion_GAN(pred_fake, target_fake)
 
         # Total loss
-        loss_D_B = (loss_D_real + loss_D_fake) * 0.5
+        loss_D_B = (loss_D_real + loss_D_fake) * 1.0
         loss_D_B.backward()
 
         self.optimizer_D.step()
