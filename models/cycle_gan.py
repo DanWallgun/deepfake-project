@@ -1,13 +1,14 @@
 import itertools
 import io
 
+import numpy as np
 import torch
 
 from models.generator import Generator
 from models.discriminator import Discriminator
 from util.image_buffer import ImageBuffer
 from util.storage import Storage
-
+from util.attention import AttentionProvider
 
 class CycleGAN():
     def __init__(self, config, checkpoints_storage):
@@ -17,6 +18,10 @@ class CycleGAN():
         self.is_train = config.getboolean('IsTrain')
         self.experiment_name = config.get('ExperimentName')
         self.checkpoints_storage: Storage = checkpoints_storage
+        self.attention_provider = AttentionProvider(
+            'external/attention/bisenet_pretrained.pth',
+            self.device
+        )
 
         #### Define Networks ####
         self.netG_A2B = Generator(
@@ -124,6 +129,13 @@ class CycleGAN():
 
         return data
 
+    @staticmethod
+    def weighted_L1_loss(image, target, weights):
+        inds = weights.nonzero(as_tuple=True)
+        if inds[0].shape[0] == 0:
+            return torch.tensor(0)
+        return ((image - target).abs() * weights)[inds].mean()
+
     def optimize_parameters(self, data):
         real_A = data['A'].to(self.device)
         real_B = data['B'].to(self.device)
@@ -154,9 +166,29 @@ class CycleGAN():
         # Cycle loss
         rec_A = self.netG_B2A(fake_B)
         loss_cycle_ABA = self.criterion_cycle(rec_A, real_A) * 10.0
+        # Cycle loss (Attention)
+        weights = self.attention_provider.get_weights(real_A[0]).unsqueeze(0).unsqueeze(0)
+        attention_loss_ABA = CycleGAN.weighted_L1_loss(
+            rec_A,
+            real_A,
+            weights
+        ) * 8.0
+        if np.isnan(attention_loss_ABA.item()):
+            print(f'Batch {i} attention_loss_ABA is Nan')
+        loss_cycle_ABA += attention_loss_ABA
 
         rec_B = self.netG_A2B(fake_A)
         loss_cycle_BAB = self.criterion_cycle(rec_B, real_B) * 10.0
+        # Cycle loss (Attention)
+        weights = self.attention_provider.get_weights(real_B[0]).unsqueeze(0).unsqueeze(0)
+        attention_loss_BAB = CycleGAN.weighted_L1_loss(
+            rec_B,
+            real_B,
+            weights
+        ) * 8.0
+        if np.isnan(attention_loss_BAB.item()):
+            print(f'Batch {i} attention_loss_BAB is Nan')
+        loss_cycle_BAB += attention_loss_BAB
 
         # Total loss
         loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
@@ -207,5 +239,6 @@ class CycleGAN():
             'loss_G_identity': (loss_identity_A + loss_identity_B),
             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB),
-            'loss_D': (loss_D_A + loss_D_B)
+            'loss_D': (loss_D_A + loss_D_B),
+            'loss_G_attention': (attention_loss_ABA + attention_loss_BAB)
         }

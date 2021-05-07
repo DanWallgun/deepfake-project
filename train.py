@@ -122,11 +122,11 @@ def main():
 
             logger.end_batch(batch_idx, losses)
         model.save_networks(epoch)
-        tb_writer.add_image('TrainImages/A', batch['A'][0] * 0.5 + 0.5, epoch)
-        tb_writer.add_image('TrainImages/B', batch['B'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/A/real', batch['A'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/B/real', batch['B'][0] * 0.5 + 0.5, epoch)
         batch = model.forward(batch)
-        tb_writer.add_image('TrainImages/A_gen', batch['A'][0] * 0.5 + 0.5, epoch)
-        tb_writer.add_image('TrainImages/B_gen', batch['B'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/A/fake', batch['A'][0] * 0.5 + 0.5, epoch)
+        tb_writer.add_image('TrainImages/B/fake', batch['B'][0] * 0.5 + 0.5, epoch)
 
     tb_writer.flush()
     tb_writer.close()
