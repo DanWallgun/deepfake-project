@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 
-from dataloaders.video_dataset import VideoDataset
+from dataloaders.video_dataset import DecordVideoDataset as VideoDataset
 from models.cycle_gan import CycleGAN
 from util.storage import (
     Storage,
@@ -65,7 +65,7 @@ def create_dataloader(config, datasets_storage, copy_data_to_local=False):
 
     # Dataset loader
     train_transform = transforms.Compose([
-        transforms.Lambda(lambda x: cv2.resize(x, dsize=(int(image_size * 1.1), int(image_size * 1.1)), interpolation=cv2.INTER_CUBIC)),
+        transforms.Lambda(lambda x: cv2.resize(x, dsize=(int(image_size * 1.075), int(image_size * 1.075)), interpolation=cv2.INTER_CUBIC)),
         transforms.Lambda(lambda x: get_random_crop(x, image_size, image_size)),
         transforms.Lambda(lambda x: cv2.flip(x, flipCode=1) if np.random.randint(2) else x),
         transforms.ToTensor(),
