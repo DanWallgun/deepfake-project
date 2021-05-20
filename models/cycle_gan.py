@@ -57,28 +57,30 @@ class CycleGAN():
                     self.netG_A2B.parameters(),
                     self.netG_B2A.parameters()
                 ),
-                lr=self.learning_rate
+                lr=self.learning_rate,
+                betas=(0.5, 0.999)
             )
             self.optimizer_D = torch.optim.Adam(
                 itertools.chain(
                     self.netD_A.parameters(),
                     self.netD_B.parameters()
                 ),
-                lr=self.learning_rate
+                lr=self.learning_rate,
+                betas=(0.5, 0.999)
             )
 
-            self.lr_scheduler_G = torch.optim.lr_scheduler.CyclicLR(
-                optimizer=self.optimizer_G,
-                base_lr=config.getfloat('MinLearningRate'),
-                max_lr=config.getfloat('LearningRate'),
-                cycle_momentum=False
-            )
-            self.lr_scheduler_D = torch.optim.lr_scheduler.CyclicLR(
-                optimizer=self.optimizer_D,
-                base_lr=config.getfloat('MinLearningRate'),
-                max_lr=config.getfloat('LearningRate'),
-                cycle_momentum=False
-            )
+            # self.lr_scheduler_G = torch.optim.lr_scheduler.CyclicLR(
+            #     optimizer=self.optimizer_G,
+            #     base_lr=config.getfloat('MinLearningRate'),
+            #     max_lr=config.getfloat('LearningRate'),
+            #     cycle_momentum=False
+            # )
+            # self.lr_scheduler_D = torch.optim.lr_scheduler.CyclicLR(
+            #     optimizer=self.optimizer_D,
+            #     base_lr=config.getfloat('MinLearningRate'),
+            #     max_lr=config.getfloat('LearningRate'),
+            #     cycle_momentum=False
+            # )
         ####    ####
 
     def init_networks_normal(self):
@@ -157,11 +159,11 @@ class CycleGAN():
         # GAN loss
         fake_B = self.netG_A2B(real_A)
         pred_fake = self.netD_B(fake_B)
-        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real) * 5.0
+        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real) * 1.0
 
         fake_A = self.netG_B2A(real_B)
         pred_fake = self.netD_A(fake_A)
-        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real) * 5.0
+        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real) * 1.0
 
         # Cycle loss
         rec_A = self.netG_B2A(fake_B)
@@ -172,7 +174,7 @@ class CycleGAN():
             rec_A,
             real_A,
             weights
-        ) * 8.0
+        ) * 5.0
         if np.isnan(attention_loss_ABA.item()):
             print(f'Batch {i} attention_loss_ABA is Nan')
         loss_cycle_ABA += attention_loss_ABA
@@ -185,7 +187,7 @@ class CycleGAN():
             rec_B,
             real_B,
             weights
-        ) * 8.0
+        ) * 5.0
         if np.isnan(attention_loss_BAB.item()):
             print(f'Batch {i} attention_loss_BAB is Nan')
         loss_cycle_BAB += attention_loss_BAB
@@ -211,7 +213,7 @@ class CycleGAN():
         loss_D_fake = self.criterion_GAN(pred_fake, target_fake)
 
         # Total loss
-        loss_D_A = (loss_D_real + loss_D_fake) * 1.0
+        loss_D_A = (loss_D_real + loss_D_fake) * 0.5
         loss_D_A.backward()
 
         #### Discriminator B
@@ -225,14 +227,14 @@ class CycleGAN():
         loss_D_fake = self.criterion_GAN(pred_fake, target_fake)
 
         # Total loss
-        loss_D_B = (loss_D_real + loss_D_fake) * 1.0
+        loss_D_B = (loss_D_real + loss_D_fake) * 0.5
         loss_D_B.backward()
 
         self.optimizer_D.step()
         ####    ####
 
-        self.lr_scheduler_G.step()
-        self.lr_scheduler_D.step()
+        # self.lr_scheduler_G.step()
+        # self.lr_scheduler_D.step()
 
         return {
             'loss_G': loss_G,

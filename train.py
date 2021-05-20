@@ -1,6 +1,7 @@
 import sys
 import configparser
 import logging
+import copy
 
 import numpy as np
 import cv2
@@ -122,13 +123,16 @@ def main():
         for batch_idx, batch in enumerate(dataloader):
             losses = model.optimize_parameters(batch)
             if (batch_idx + 1) % logging_freq == 0:
+                # log
                 logger.end_batch(batch_idx, losses)
+                # images
+                data = copy.deepcopy(batch)
+                tb_writer.add_image('TrainImages/A/real', data['A'][0] * 0.5 + 0.5, epoch)
+                tb_writer.add_image('TrainImages/B/real', data['B'][0] * 0.5 + 0.5, epoch)
+                data = model.forward(data)
+                tb_writer.add_image('TrainImages/A/fake', data['A'][0] * 0.5 + 0.5, epoch)
+                tb_writer.add_image('TrainImages/B/fake', data['B'][0] * 0.5 + 0.5, epoch)
         model.save_networks(epoch)
-        tb_writer.add_image('TrainImages/A/real', batch['A'][0] * 0.5 + 0.5, epoch)
-        tb_writer.add_image('TrainImages/B/real', batch['B'][0] * 0.5 + 0.5, epoch)
-        batch = model.forward(batch)
-        tb_writer.add_image('TrainImages/A/fake', batch['A'][0] * 0.5 + 0.5, epoch)
-        tb_writer.add_image('TrainImages/B/fake', batch['B'][0] * 0.5 + 0.5, epoch)
 
     tb_writer.flush()
     tb_writer.close()

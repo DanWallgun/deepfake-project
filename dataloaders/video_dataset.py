@@ -58,15 +58,8 @@ class DecordVideoDataset(Dataset):
         self.transform = transform
 
     def __getitem__(self, index):
-        item_A = self.transform(cv2.cvtColor(
-            self.vr_A[np.random.randint(self.len_A)].asnumpy(),
-            cv2.COLOR_BGR2RGB
-        ))
-
-        item_B = self.transform(cv2.cvtColor(
-            self.vr_B[np.random.randint(self.len_B)].asnumpy(),
-            cv2.COLOR_BGR2RGB
-        ))
+        item_A = self.transform(self.vr_A[np.random.randint(self.len_A)].asnumpy())
+        item_B = self.transform(self.vr_B[np.random.randint(self.len_B)].asnumpy())
 
         return {
             'A': item_A,
