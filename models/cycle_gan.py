@@ -69,18 +69,16 @@ class CycleGAN():
                 betas=(0.5, 0.999)
             )
 
-            # self.lr_scheduler_G = torch.optim.lr_scheduler.CyclicLR(
-            #     optimizer=self.optimizer_G,
-            #     base_lr=config.getfloat('MinLearningRate'),
-            #     max_lr=config.getfloat('LearningRate'),
-            #     cycle_momentum=False
-            # )
-            # self.lr_scheduler_D = torch.optim.lr_scheduler.CyclicLR(
-            #     optimizer=self.optimizer_D,
-            #     base_lr=config.getfloat('MinLearningRate'),
-            #     max_lr=config.getfloat('LearningRate'),
-            #     cycle_momentum=False
-            # )
+            self.lr_scheduler_G = torch.optim.lr_scheduler.ExponentialLR(
+                optimizer=self.optimizer_G,
+                gamma=config.getfloat('Gamma'),
+           #     cycle_momentum=False
+            )
+            self.lr_scheduler_D = torch.optim.lr_scheduler.ExponentialLR(
+                optimizer=self.optimizer_D,
+                gamma=config.getfloat('Gamma'),
+           #     cycle_momentum=False
+            )
         ####    ####
 
     def init_networks_normal(self):
@@ -138,6 +136,16 @@ class CycleGAN():
             return torch.tensor(0)
         return ((image - target).abs() * weights)[inds].mean()
 
+    def mess_up_image(self, image):
+        dropout_prob = 0.05
+        w = image.shape[2]
+        n = int(w * w * dropout_prob)
+        black_indices = tuple(torch.randint(high=w, size=(2, n)))
+        mask = torch.ones_like(image)
+        mask[0, :, black_indices[0], black_indices[1]] = 0
+        image = image * mask
+        return image
+
     def optimize_parameters(self, data):
         real_A = data['A'].to(self.device)
         real_B = data['B'].to(self.device)
@@ -151,22 +159,23 @@ class CycleGAN():
         # Identity loss
         # G_A2B(B) should equal B if real B is fed
         same_B = self.netG_A2B(real_B)
-        loss_identity_B = self.criterion_identity(same_B, real_B) * 5.0
+        loss_identity_B = self.criterion_identity(same_B, real_B) * 0.0
         # G_B2A(A) should equal A if real A is fed
         same_A = self.netG_B2A(real_A)
-        loss_identity_A = self.criterion_identity(same_A, real_A) * 5.0
+        loss_identity_A = self.criterion_identity(same_A, real_A) * 0.0
+
 
         # GAN loss
         fake_B = self.netG_A2B(real_A)
         pred_fake = self.netD_B(fake_B)
-        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real) * 1.0
+        loss_GAN_A2B = self.criterion_GAN(pred_fake, target_real) * 4.0
 
         fake_A = self.netG_B2A(real_B)
         pred_fake = self.netD_A(fake_A)
-        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real) * 1.0
+        loss_GAN_B2A = self.criterion_GAN(pred_fake, target_real) * 4.0
 
         # Cycle loss
-        rec_A = self.netG_B2A(fake_B)
+        rec_A = self.netG_B2A(self.mess_up_image(fake_B))
         loss_cycle_ABA = self.criterion_cycle(rec_A, real_A) * 10.0
         # Cycle loss (Attention)
         weights = self.attention_provider.get_weights(real_A[0]).unsqueeze(0).unsqueeze(0)
@@ -179,7 +188,7 @@ class CycleGAN():
             print(f'Batch {i} attention_loss_ABA is Nan')
         loss_cycle_ABA += attention_loss_ABA
 
-        rec_B = self.netG_A2B(fake_A)
+        rec_B = self.netG_A2B(self.mess_up_image(fake_A))
         loss_cycle_BAB = self.criterion_cycle(rec_B, real_B) * 10.0
         # Cycle loss (Attention)
         weights = self.attention_provider.get_weights(real_B[0]).unsqueeze(0).unsqueeze(0)
@@ -187,13 +196,28 @@ class CycleGAN():
             rec_B,
             real_B,
             weights
-        ) * 5.0
+        ) * 7.0
         if np.isnan(attention_loss_BAB.item()):
             print(f'Batch {i} attention_loss_BAB is Nan')
         loss_cycle_BAB += attention_loss_BAB
 
+        if True:
+            # GAN Loss
+            fakefake_B = self.netG_A2B(rec_A)
+            pred_fakefake = self.netD_B(fakefake_B)
+            loss_GAN_A2B_twice = self.criterion_GAN(pred_fakefake, target_real) * 4.0
+
+            fakefake_A = self.netG_B2A(rec_B)
+            pred_fakefake = self.netD_A(fakefake_A)
+            loss_GAN_B2A_twice = self.criterion_GAN(pred_fakefake, target_real) * 4.0
+            # CycleLoss between fake_B and fakefake_B
+            fake_loss_cycle_B = self.criterion_cycle(fake_B, fakefake_B) * 10.0
+            fake_loss_cycle_A = self.criterion_cycle(fake_A, fakefake_A) * 10.0
+
+            loss_onehalf = (loss_GAN_A2B_twice + fake_loss_cycle_B + fake_loss_cycle_A + loss_GAN_B2A_twice) * 0.2
+
         # Total loss
-        loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+        loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB + loss_onehalf
         loss_G.backward()
 
         self.optimizer_G.step()
@@ -242,5 +266,8 @@ class CycleGAN():
             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB),
             'loss_D': (loss_D_A + loss_D_B),
-            'loss_G_attention': (attention_loss_ABA + attention_loss_BAB)
+            'loss_G_attention': (attention_loss_ABA + attention_loss_BAB),
+            'loss_GAN_A2B_twice': loss_GAN_A2B_twice,
+            'fake_loss_cycle_B': fake_loss_cycle_B,
+            'fake_loss_cycle_A': fake_loss_cycle_A
         }

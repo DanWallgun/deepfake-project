@@ -4,7 +4,6 @@ import sys
 
 import cv2
 import numpy as np
-import tqdm
 import torch
 import torchvision.transforms as transforms
 
@@ -46,11 +45,15 @@ def main():
     datasets_storage = create_storage(config, 'Datasets')
     if config.getboolean('CopyDatasetsToLocal'):
         prepare_data(config, datasets_storage)
+        exit(0)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
     ])
+
+    direction = config.get('Direction')
+    assert direction == 'A2B' or direction == 'B2A'
 
     video_path = config.get('InferenceVideo')
     kek = video_path.split('.')
@@ -65,7 +68,7 @@ def main():
     model.load_networks(config.getint('InferenceEpoch'))
     vid_cap = cv2.VideoCapture(video_path)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_cap = cv2.VideoWriter(out_video_path, fourcc, 24.0, (2 * image_size,  image_size))
+    out_cap = cv2.VideoWriter(out_video_path, fourcc, 24.0, (3 * image_size,  image_size))
 
     frame_count = int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
     counter = 0
@@ -84,14 +87,19 @@ def main():
 
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
-        if buffer.shape[0] == 24 * 4 or (not ret and buffer.shape[0] > 0):
+        if buffer.shape[0] == 24 * 3 or (not ret and buffer.shape[0] > 0):
+            letA, letB = direction[0], direction[2]
             image = buffer_tensor
-            image = model.forward({'A': buffer_tensor})['A']
+            image = model.forward({letA: buffer_tensor})[letA]
+            rec = model.forward({letB: image})[letB]
             image = 0.5 * (image + 1.0)
+            rec = 0.5 * (rec + 1.0)
             processed = image.permute(0, 2, 3, 1).cpu().numpy()
+            proc_rec = rec.permute(0, 2, 3, 1).cpu().numpy()
             processed = (processed * 255).astype(np.uint8)
+            proc_rec = (proc_rec * 255).astype(np.uint8)
 
-            frame_buffer = np.concatenate((buffer, processed), axis=2)
+            frame_buffer = np.concatenate((buffer, processed, proc_rec), axis=2)
             for frame in frame_buffer:
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 out_cap.write(frame)

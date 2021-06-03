@@ -5,7 +5,6 @@ import copy
 
 import numpy as np
 import cv2
-import tqdm
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
@@ -81,6 +80,7 @@ def create_dataloader(config, datasets_storage, copy_data_to_local=False):
             file_bytes = datasets_storage.load_file(path)
             with open(path, 'wb') as f:
                 f.write(file_bytes)
+        exit(0)
     dataloader = DataLoader(
         VideoDataset(
             video_paths=video_paths,
@@ -132,6 +132,10 @@ def main():
                 data = model.forward(data)
                 tb_writer.add_image('TrainImages/A/fake', data['A'][0] * 0.5 + 0.5, epoch)
                 tb_writer.add_image('TrainImages/B/fake', data['B'][0] * 0.5 + 0.5, epoch)
+                data['A'] = model.mess_up_image(data['A'])
+                data['B'] = model.mess_up_image(data['B'])
+                tb_writer.add_image('TrainImages/A/mess_up_image', data['A'][0] * 0.5 + 0.5, epoch)
+                tb_writer.add_image('TrainImages/B/mess_up_image', data['B'][0] * 0.5 + 0.5, epoch)
         model.save_networks(epoch)
 
     tb_writer.flush()
